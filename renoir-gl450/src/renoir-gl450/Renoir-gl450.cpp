@@ -13,9 +13,13 @@
 #include <mn/Debug.h>
 
 #include <GL/glew.h>
+#include <GL/wglew.h>
 
 #include <math.h>
 #include <stdio.h>
+
+#define GL_GPU_MEM_INFO_TOTAL_AVAILABLE_MEM_NVX 0x9048
+#define GL_GPU_MEM_INFO_CURRENT_AVAILABLE_MEM_NVX 0x9049
 
 inline static bool
 _renoir_gl450_check()
@@ -4305,6 +4309,48 @@ _renoir_gl450_timer_end(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer
 	}
 }
 
+inline static Renoir_Device_Info 
+_device_info(struct Renoir* api)
+{
+	Renoir_Device_Info self{};
+	auto gpu_desc = mn::str_from_c((char*)glGetString(GL_VENDOR));
+	mn::str_push(gpu_desc, " ");
+	mn::str_push(gpu_desc, (char*) glGetString(GL_RENDERER));
+	mn_defer(mn::str_free(gpu_desc));
+
+	auto api_version = mn::str_from_c((char*)glGetString(GL_VERSION));
+	mn::str_push(api_version, ", GLSL ");
+	mn::str_push(api_version, (char*) glGetString(GL_SHADING_LANGUAGE_VERSION));
+	mn_defer(mn::str_free(api_version));
+
+	::strcpy(self.device_description, gpu_desc.ptr);
+	::strcpy(self.api_version, api_version.ptr);
+
+	GLuint total_mem_mb = 0;
+	if(mn::str_find(gpu_desc, "NVIDIA", 0) != size_t(-1))
+	{
+		GLint total_mem_kb;
+		glGetIntegerv(GL_GPU_MEM_INFO_TOTAL_AVAILABLE_MEM_NVX, &total_mem_kb);
+		total_mem_mb = total_mem_kb/1024;
+	}
+	else if(mn::str_find(gpu_desc, "AMD", 0) != size_t(-1) || mn::str_find(gpu_desc, "ATI", 0) != size_t(-1))
+	{
+		GLuint uNoOfGPUs = wglGetGPUIDsAMD( 0, 0 );
+		GLuint* uGPUIDs = new GLuint[uNoOfGPUs];
+		wglGetGPUIDsAMD( uNoOfGPUs, uGPUIDs );
+
+		wglGetGPUInfoAMD( uGPUIDs[0],
+						WGL_GPU_RAM_AMD,
+						GL_UNSIGNED_INT,
+						sizeof( GLuint ),
+						&total_mem_mb );
+	}
+
+	self.total_memory_mb = total_mem_mb;
+
+	return self;
+}
+
 inline static void
 _renoir_load_api(Renoir* api)
 {
@@ -4371,6 +4417,7 @@ _renoir_load_api(Renoir* api)
 	api->dispatch = _renoir_gl450_dispatch;
 	api->timer_begin = _renoir_gl450_timer_begin;
 	api->timer_end = _renoir_gl450_timer_end;
+	api->device_info = _device_info;
 }
 
 Renoir*

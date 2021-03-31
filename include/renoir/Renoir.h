@@ -363,6 +363,12 @@ typedef struct Renoir_Buffer_Storage_Bind_Desc {
 	int start_slot;
 } Renoir_Buffer_Storage_Bind_Desc;
 
+typedef struct Renoir_Device_Info{
+ char device_description[128];
+ char api_version[128];
+ uint32_t total_memory_mb;
+} Renoir_Device_Info;
+
 struct IRenoir;
 
 typedef struct Renoir
@@ -443,6 +449,8 @@ typedef struct Renoir
 	// Timer
 	void (*timer_begin)(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer);
 	void (*timer_end)(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer);
+	// GPU Info
+	Renoir_Device_Info (*device_info)(struct Renoir* api);
 } Renoir;
 
 #define RENOIR_API "renoir"

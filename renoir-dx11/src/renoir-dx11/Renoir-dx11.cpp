@@ -4718,6 +4718,79 @@ _renoir_dx11_timer_end(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer)
 	}
 }
 
+inline static const char*
+_feature_level(D3D_FEATURE_LEVEL feature_level)
+{
+	switch(feature_level)
+	{
+		case D3D_FEATURE_LEVEL_11_1: return "Feature level 11.1, Shader Model 5.0";
+		case D3D_FEATURE_LEVEL_11_0: return "Feature level 11.0, Shader Model 5.0";
+		default: return "unreachable";
+	}
+}
+
+inline static Renoir_Device_Info 
+_device_info(struct Renoir* api)
+{
+	auto self = api->ctx;
+	Renoir_Device_Info ret{};
+
+	D3D_FEATURE_LEVEL max_supported_feature_level = D3D_FEATURE_LEVEL_11_0;
+	const D3D_FEATURE_LEVEL feature_levels[] = {
+			D3D_FEATURE_LEVEL_11_1,
+			D3D_FEATURE_LEVEL_11_0
+		};
+
+	HRESULT hr = D3D11CreateDevice(
+		nullptr,
+		D3D_DRIVER_TYPE_HARDWARE,
+		nullptr, 
+		0, 
+		feature_levels, 
+		2, 
+		D3D11_SDK_VERSION, 
+		nullptr, 
+		&max_supported_feature_level, 
+		nullptr
+		);
+
+	::strcpy(ret.api_version, _feature_level(max_supported_feature_level));
+
+	if (self->settings.external_context == false)
+	{
+		DXGI_ADAPTER_DESC dxgi_adapter_desc{};
+		auto res = self->adapter->GetDesc(&dxgi_adapter_desc);
+		assert(SUCCEEDED(res));
+		auto description = mn::from_os_encoding(mn::block_from(dxgi_adapter_desc.Description));
+		mn_defer(mn::str_free(description));
+		
+		::strcpy(ret.device_description, description.ptr);
+		ret.total_memory_mb = dxgi_adapter_desc.DedicatedVideoMemory / 1024 / 1024;
+	}
+	else
+	{
+		IDXGIDevice* dxgi_device = nullptr;
+		auto res = self->device->QueryInterface(__uuidof(IDXGIDevice), (void**)&dxgi_device);
+		assert(SUCCEEDED(res));
+		mn_defer(dxgi_device->Release());
+
+		IDXGIAdapter* dxgi_adapter = nullptr;
+		res = dxgi_device->GetAdapter(&dxgi_adapter);
+		assert(SUCCEEDED(res));
+		mn_defer(dxgi_adapter->Release());
+
+		DXGI_ADAPTER_DESC dxgi_adapter_desc{};
+		res = dxgi_adapter->GetDesc(&dxgi_adapter_desc);
+		assert(SUCCEEDED(res));
+
+		auto description = mn::from_os_encoding(mn::block_from(dxgi_adapter_desc.Description));
+		mn_defer(mn::str_free(description));
+		::strcpy(ret.device_description, description.ptr);
+		ret.total_memory_mb = dxgi_adapter_desc.DedicatedVideoMemory / 1024 / 1024;
+	}
+
+	return ret;
+}
 
 inline static void
 _renoir_load_api(Renoir* api)
@@ -4785,6 +4858,7 @@ _renoir_load_api(Renoir* api)
 	api->dispatch = _renoir_dx11_dispatch;
 	api->timer_begin = _renoir_dx11_timer_begin;
 	api->timer_end = _renoir_dx11_timer_end;
+	api->device_info = _device_info;
 }
 
 Renoir*
