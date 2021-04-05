@@ -13,7 +13,11 @@
 #include <mn/Debug.h>
 
 #include <GL/glew.h>
+#ifdef OS_WINDOWS
 #include <GL/wglew.h>
+#elif OS_LINUX
+#include <GL/glxew.h>
+#endif
 
 #include <math.h>
 #include <stdio.h>
@@ -4310,9 +4314,11 @@ _renoir_gl450_timer_end(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer
 }
 
 inline static Renoir_Device_Info 
-_device_info(struct Renoir* api)
+_renoir_gl450_device_info(struct Renoir* api)
 {
-	Renoir_Device_Info self{};
+	auto self = api->ctx;
+
+	Renoir_Device_Info ret{};
 	auto gpu_desc = mn::str_from_c((char*)glGetString(GL_VENDOR));
 	mn::str_push(gpu_desc, " ");
 	mn::str_push(gpu_desc, (char*) glGetString(GL_RENDERER));
@@ -4323,8 +4329,8 @@ _device_info(struct Renoir* api)
 	mn::str_push(api_version, (char*) glGetString(GL_SHADING_LANGUAGE_VERSION));
 	mn_defer(mn::str_free(api_version));
 
-	::strcpy(self.device_description, gpu_desc.ptr);
-	::strcpy(self.api_version, api_version.ptr);
+	::strcpy(ret.device_description, gpu_desc.ptr);
+	::strcpy(ret.api_version, api_version.ptr);
 
 	GLuint total_mem_mb = 0;
 	if(mn::str_find(gpu_desc, "NVIDIA", 0) != size_t(-1))
@@ -4335,6 +4341,10 @@ _device_info(struct Renoir* api)
 	}
 	else if(mn::str_find(gpu_desc, "AMD", 0) != size_t(-1) || mn::str_find(gpu_desc, "ATI", 0) != size_t(-1))
 	{
+		#ifdef OS_LINUX
+		auto res = glXQueryRendererIntegerMESA(self.display, 0, 0, GLX_RENDERER_VIDEO_MEMORY_MESA, &total_mem_mb);
+		assert(res);
+		#elif OS_WINDOWS
 		GLuint uNoOfGPUs = wglGetGPUIDsAMD( 0, 0 );
 		GLuint* uGPUIDs = new GLuint[uNoOfGPUs];
 		wglGetGPUIDsAMD( uNoOfGPUs, uGPUIDs );
@@ -4344,11 +4354,12 @@ _device_info(struct Renoir* api)
 						GL_UNSIGNED_INT,
 						sizeof( GLuint ),
 						&total_mem_mb );
+		#endif
 	}
 
-	self.total_memory_mb = total_mem_mb;
+	ret.total_memory_mb = total_mem_mb;
 
-	return self;
+	return ret;
 }
 
 inline static void
@@ -4417,7 +4428,7 @@ _renoir_load_api(Renoir* api)
 	api->dispatch = _renoir_gl450_dispatch;
 	api->timer_begin = _renoir_gl450_timer_begin;
 	api->timer_end = _renoir_gl450_timer_end;
-	api->device_info = _device_info;
+	api->device_info = _renoir_gl450_device_info;
 }
 
 Renoir*

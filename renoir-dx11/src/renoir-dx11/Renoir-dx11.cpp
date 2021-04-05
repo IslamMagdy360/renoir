@@ -4730,7 +4730,7 @@ _feature_level(D3D_FEATURE_LEVEL feature_level)
 }
 
 inline static Renoir_Device_Info 
-_device_info(struct Renoir* api)
+_renoir_dx11_device_info(struct Renoir* api)
 {
 	auto self = api->ctx;
 	Renoir_Device_Info ret{};
@@ -4858,7 +4858,7 @@ _renoir_load_api(Renoir* api)
 	api->dispatch = _renoir_dx11_dispatch;
 	api->timer_begin = _renoir_dx11_timer_begin;
 	api->timer_end = _renoir_dx11_timer_end;
-	api->device_info = _device_info;
+	api->device_info = _renoir_dx11_device_info;
 }
 
 Renoir*
